@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { PrismaClient, Role, AvailabilityType, SwapType, SwapStatus } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import { addDays, startOfWeek, subWeeks } from 'date-fns';
+import { addDays, startOfISOWeek, subWeeks } from 'date-fns';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -11,11 +11,11 @@ async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
 }
 
-// Get Monday 00:00 UTC of a given date's ISO week
+// Get Monday 00:00 UTC of the ISO week containing the given date (pure UTC, no local timezone)
 function getWeekOf(date: Date): Date {
-  const d = startOfWeek(date, { weekStartsOn: 1 });
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
+  const utcDay = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const daysToMonday = utcDay === 0 ? -6 : 1 - utcDay;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + daysToMonday));
 }
 
 async function main() {
