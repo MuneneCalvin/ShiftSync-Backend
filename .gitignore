@@ -58,5 +58,8 @@ Thumbs.db
 *.wmv
 
 
-# Prisma
+# Prisma generated files
+prisma/migrations/
+prisma/dev.db
 /generated/prisma
+/generated/client
