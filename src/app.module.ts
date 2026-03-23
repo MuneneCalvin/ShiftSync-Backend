@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +16,8 @@ import { GatewayModule } from './gateway/gateway.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
+  controllers: [AppController],
+  providers: [AppService],
   imports: [
     PrismaModule,
     RedisModule,
