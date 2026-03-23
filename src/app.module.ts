@@ -8,6 +8,8 @@ import { LocationsModule } from './locations/locations.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { ConstraintEngineModule } from './constraint-engine/constraint-engine.module';
 import { ShiftsModule } from './shifts/shifts.module';
+import { SwapsModule } from './swaps/swaps.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { ShiftsModule } from './shifts/shifts.module';
     AvailabilityModule,
     ConstraintEngineModule,
     ShiftsModule,
+    SwapsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
