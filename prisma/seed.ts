@@ -4,7 +4,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import { addDays, startOfISOWeek, subWeeks } from 'date-fns';
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const ssl = process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined;
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL!, ssl });
 const prisma = new PrismaClient({ adapter });
 
 async function hashPassword(password: string): Promise<string> {
