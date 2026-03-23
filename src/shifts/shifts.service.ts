@@ -16,9 +16,12 @@ export class ShiftsService {
     private gateway: EventsGateway,
   ) {}
 
-  async findByLocationAndWeek(locationId: string, weekOf: string) {
+  async findByLocationAndWeek(locationId?: string, weekOf?: string) {
     return this.prisma.shift.findMany({
-      where: { locationId, weekOf: new Date(weekOf) },
+      where: {
+        ...(locationId && { locationId }),
+        ...(weekOf && { weekOf: new Date(weekOf) }),
+      },
       include: {
         location: true,
         assignments: {
