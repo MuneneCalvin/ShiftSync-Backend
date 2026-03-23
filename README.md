@@ -1,99 +1,143 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ShiftSync
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A full-stack multi-location staff scheduling platform built for Coastal Eats.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+**Live URLs**
+- Frontend: https://shift-sync-app.vercel.app
+- Backend API: https://shiftsync-backend-yp8z.onrender.com
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Test Credentials
 
-## Project setup
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@coastaleats.com | Admin123! |
+| Manager (LA/SF) | manager.la@coastaleats.com | Manager1! |
+| Manager (NYC/Miami) | manager.nyc@coastaleats.com | Manager1! |
+| Staff | alex.rivera@coastaleats.com | Staff123! |
+| Staff | sam.chen@coastaleats.com | Staff123! |
+| Staff | maria.santos@coastaleats.com | Staff123! |
+| Staff | jordan.kim@coastaleats.com | Staff123! |
+| Staff | casey.okafor@coastaleats.com | Staff123! |
+| Staff | taylor.nguyen@coastaleats.com | Staff123! |
+| Staff | jamie.park@coastaleats.com | Staff123! |
+| Staff | drew.hassan@coastaleats.com | Staff123! |
 
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 15 (App Router), Tailwind CSS, TanStack Query, socket.io-client |
+| Backend | NestJS 11, TypeScript, Passport JWT |
+| Database | PostgreSQL 18 via Prisma v7 + `@prisma/adapter-pg` |
+| Cache / Locks | Redis (ioredis v5) |
+| Real-time | Socket.io 4 |
+| Deployment | Vercel (frontend), Render (backend + Postgres) |
+
+---
+
+## Evaluator Scenarios
+
+### Scenario 1 — Skill mismatch
+Assign **Jordan Kim** (skills: server, host) to the Sunday **bartender** shift at Santa Monica.
+- Constraint engine returns `BLOCK: SKILL_MATCH` — Jordan doesn't have the bartender skill.
+- UI shows red ViolationBanner; assignment is rejected.
+
+### Scenario 2 — Overtime warning
+Jordan Kim already has 34h scheduled this week (Mon–Thu at New York).
+Attempt to assign Jordan to another 8.5h shift:
+- Constraint engine returns `WARN: DAILY_OVERTIME` (shift is 8.5h, threshold is 8h).
+- Manager can override with a written reason.
+
+### Scenario 3 — Pending swap
+A `SWAP` request from **Taylor Nguyen → Drew Hassan** for the Wednesday SF line cook shift is pre-seeded with status `PENDING`.
+- Visible in the Manager's **Swap Requests** page.
+- Manager can Approve (re-runs constraint engine) or Reject.
+- State machine: `PENDING → ACCEPTED → MANAGER_REVIEW → APPROVED`.
+
+### Scenario 4 — Location certification block
+Attempt to assign **Casey Okafor** (certified at Santa Monica only) to the San Francisco line cook shift:
+- Constraint engine returns `BLOCK: LOCATION_CERT` + `BLOCK: SKILL_MATCH`.
+- Suggestions list shows staff who are both certified and available.
+
+### Scenario 5 — Fairness complaint
+Open **Analytics → Fairness** tab, select Coastal Eats — Santa Monica:
+- Alex Rivera has 6 Saturday evening shifts in the past 6 weeks.
+- Casey Okafor has **0** Saturday evening shifts — highlighted with a callout banner.
+- Fairness score reflects the unequal distribution.
+
+### Scenario 6 — Sam Chen callout
+The Sunday 7pm shift at Santa Monica has **headcount 2**, with Sam Chen and Drew Hassan assigned and the shift published.
+- Sam calling out = manager removes Sam's assignment via the schedule grid.
+- The shift still has Drew; manager can assign a replacement from the suggestions list (Alex Rivera qualifies: has bartender skill + SM cert).
+
+---
+
+## Architecture Decisions & Ambiguities
+
+### Prisma v7 driver adapter
+Prisma v7 removed the `url = env("DATABASE_URL")` field from `schema.prisma`. The datasource URL is now provided exclusively via `@prisma/adapter-pg` passed to `new PrismaClient({ adapter })`. A `prisma.config.ts` file handles the Prisma CLI.
+
+### Week calculation (UTC)
+`weekOf` is stored as the Monday 00:00 UTC of the ISO week. All calculations use `getUTCDay()` to avoid local timezone shifts (e.g., UTC-8 where midnight UTC = previous local day).
+
+### Constraint engine — never short-circuits
+All 6 rules (SKILL_MATCH, LOCATION_CERT, AVAILABILITY, DOUBLE_BOOK, REST_PERIOD, OVERTIME) run on every check, collecting all violations at once. This gives managers the full picture rather than fixing errors one by one.
+
+### Overtime threshold
+The spec says "flag overtime". Interpreted as:
+- `WARN` at > 40h/week projected (overridable with reason)
+- `BLOCK` at > 60h/week projected (hard stop)
+- `WARN` for single shifts > 8h (daily threshold)
+
+### Swap state machine
+`DROP` requests (no target user) expire automatically via a `@Cron('*/15 * * * *')` job that sets status to `EXPIRED` when `expiresAt` passes. `SWAP` requests require target acceptance before entering `MANAGER_REVIEW`.
+
+### Redis distributed lock
+Before creating a `ShiftAssignment`, a Redis lock is acquired with a 3-second TTL using `SET key 1 PX 3000 NX`. Concurrent assignments to the same shift queue naturally — the second request re-runs the constraint engine after the first commits. Lock key: `shift:assign:{shiftId}`.
+
+### Real-time rooms
+Socket.io rooms are mapped on connection:
+- `user:{id}` — personal notifications
+- `location:{locationId}` — one room per certified location (staff) or managed location (manager)
+- `admin` — all admin-level events
+
+### CORS
+`CORS_ORIGIN` env var on Render accepts comma-separated origins. Falls back to `origin: true` (mirror) if not set — safe for an assessment environment.
+
+---
+
+## Running Locally
+
+### Backend
 ```bash
-$ npm install
+cd backend
+cp .env.example .env          # fill in DATABASE_URL, REDIS_URL, JWT secrets
+npm install
+npx prisma db push
+npx prisma db seed             # or: npx ts-node prisma/seed.ts
+npm run start:dev
+# API on http://localhost:3001
 ```
 
-## Compile and run the project
-
+### Frontend
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cd frontend
+echo "NEXT_PUBLIC_API_URL=http://localhost:3001" > .env.local
+npm install
+npm run dev
+# UI on http://localhost:3000
 ```
 
-## Run tests
+---
 
-```bash
-# unit tests
-$ npm run test
+## Known Limitations
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# ShiftSync-Backend
+- **Render free tier cold starts** — the backend may take 30–60 seconds to respond after inactivity. Refresh if the first request times out.
+- **No email delivery** — notifications are stored in the DB and surfaced in-app only. No SMTP integration.
+- **Availability granularity** — recurring availability is stored per day-of-week with a time window. Exception dates (single-day blocks) are supported but not exposed in the UI.
+- **No pagination** — shift and user lists are returned in full. Acceptable for the seed dataset; would need cursor pagination at scale.
+- **WebSocket on Render free tier** — Socket.io falls back to long-polling if the WebSocket upgrade is blocked. Real-time events still arrive, just with higher latency.
