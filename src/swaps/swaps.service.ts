@@ -5,12 +5,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConstraintEngineService } from '../constraint-engine/constraint-engine.service';
 import { CreateSwapDto } from './dto/create-swap.dto';
 import { SwapStatus, SwapType } from '@prisma/client';
+import { EventsGateway } from '../gateway/events.gateway';
 
 @Injectable()
 export class SwapsService {
   constructor(
     private prisma: PrismaService,
     private constraintEngine: ConstraintEngineService,
+    private gateway: EventsGateway,
   ) {}
 
   async findAll(filters: { requesterId?: string; locationId?: string; status?: SwapStatus }) {
@@ -94,7 +96,14 @@ export class SwapsService {
       data: { action: 'SWAP_CREATED', actorId: requesterId, swapId: swap.id },
     });
 
-    // TODO: emit socket event swap:requested to manager:{managerId}
+    // Notify all managers of the shift's location
+    const shiftManagers = await this.prisma.managerLocation.findMany({
+      where: { locationId: swap.shift.locationId },
+      select: { userId: true },
+    });
+    for (const m of shiftManagers) {
+      this.gateway.emitToManager(m.userId, 'swap:requested', { swap });
+    }
 
     return swap;
   }
@@ -147,7 +156,7 @@ export class SwapsService {
     for (const m of managers) {
       await this.createNotification(m.userId, 'SWAP_PENDING_REVIEW', 'Swap Awaiting Approval',
         `A ${swap.type} request for a shift at ${swap.shift.location.name} needs your review.`);
-      // TODO: emit socket event swap:requested to manager:{m.userId}
+      this.gateway.emitToManager(m.userId, 'swap:requested', { swap: updated });
     }
 
     await this.createNotification(swap.requesterId, 'SWAP_ACCEPTED', 'Swap Accepted',
@@ -157,7 +166,8 @@ export class SwapsService {
       data: { action: 'SWAP_ACCEPTED', actorId: userId, swapId },
     });
 
-    // TODO: emit socket event swap:status_changed to user:{swap.requesterId} and user:{userId}
+    this.gateway.emitToUser(swap.requesterId, 'swap:status_changed', { swapId, status: 'MANAGER_REVIEW' });
+    this.gateway.emitToUser(userId, 'swap:status_changed', { swapId, status: 'MANAGER_REVIEW' });
 
     return updated;
   }
@@ -210,8 +220,9 @@ export class SwapsService {
       data: { action: 'SWAP_APPROVED', actorId: managerId, swapId, shiftId: swap.shiftId },
     });
 
-    // TODO: emit socket event swap:status_changed to user:{swap.requesterId} and user:{targetUserId}
-    // TODO: emit socket event schedule:updated to location:{swap.shift.locationId}
+    this.gateway.emitToUser(swap.requesterId, 'swap:status_changed', { swapId, status: 'APPROVED' });
+    this.gateway.emitToUser(targetUserId, 'swap:status_changed', { swapId, status: 'APPROVED' });
+    this.gateway.emitToLocation(swap.shift.locationId, 'schedule:updated', { shiftId: swap.shiftId });
 
     return { success: true };
   }
@@ -243,7 +254,9 @@ export class SwapsService {
       data: { action: 'SWAP_CANCELLED', actorId: userId, swapId },
     });
 
-    // TODO: emit socket event swap:status_changed to user:{swap.targetUserId}
+    if (swap.targetUserId) {
+      this.gateway.emitToUser(swap.targetUserId, 'swap:status_changed', { swapId, status: 'CANCELLED' });
+    }
 
     return { success: true };
   }
@@ -270,7 +283,10 @@ export class SwapsService {
       data: { action: 'SWAP_REJECTED', actorId: managerId, swapId },
     });
 
-    // TODO: emit socket event swap:status_changed to user:{swap.requesterId}
+    this.gateway.emitToUser(swap.requesterId, 'swap:status_changed', { swapId, status: 'CANCELLED' });
+    if (swap.targetUserId) {
+      this.gateway.emitToUser(swap.targetUserId, 'swap:status_changed', { swapId, status: 'CANCELLED' });
+    }
 
     return { success: true };
   }
@@ -296,7 +312,7 @@ export class SwapsService {
     for (const swap of expired) {
       await this.createNotification(swap.requesterId, 'DROP_EXPIRED', 'Drop Request Expired',
         'Your drop request expired with no one picking up the shift.');
-      // TODO: emit socket event swap:status_changed to user:{swap.requesterId}
+      this.gateway.emitToUser(swap.requesterId, 'swap:status_changed', { swapId: swap.id, status: 'EXPIRED' });
     }
   }
 

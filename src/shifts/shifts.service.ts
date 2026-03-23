@@ -5,6 +5,7 @@ import { CreateShiftDto } from './dto/create-shift.dto';
 import { AssignShiftDto } from './dto/assign-shift.dto';
 import { Redis } from 'ioredis';
 import { REDIS_CLIENT } from '../redis/redis.module';
+import { EventsGateway } from '../gateway/events.gateway';
 
 @Injectable()
 export class ShiftsService {
@@ -12,6 +13,7 @@ export class ShiftsService {
     private prisma: PrismaService,
     private constraintEngine: ConstraintEngineService,
     @Inject(REDIS_CLIENT) private redis: Redis,
+    private gateway: EventsGateway,
   ) {}
 
   async findByLocationAndWeek(locationId: string, weekOf: string) {
@@ -84,7 +86,7 @@ export class ShiftsService {
       data: { action: 'SHIFT_PUBLISHED', actorId: managerId, shiftId, after: shift as any },
     });
 
-    // TODO: emit socket event schedule:published to location:{shift.locationId}
+    this.gateway.emitToLocation(shift.locationId, 'schedule:published', { shift });
 
     return shift;
   }
@@ -98,7 +100,9 @@ export class ShiftsService {
     const lock = await this.redis.set(lockKey, '1', 'PX', 3000, 'NX');
 
     if (!lock) {
-      // TODO: emit socket event conflict:concurrent to manager:{managerId}
+      this.gateway.emitToManager(managerId, 'conflict:concurrent', {
+        message: 'Another manager is currently assigning this person. Please wait a moment.',
+      });
       throw new BadRequestException(
         'Another manager is currently assigning this person. Please wait a moment.',
       );
@@ -146,8 +150,14 @@ export class ShiftsService {
         data: { action: 'ASSIGNMENT_CREATED', actorId: managerId, shiftId, after: assignment as any },
       });
 
-      // TODO: emit socket event assignment:created to user:{dto.userId} and location:{shift.locationId}
-      // TODO: emit socket event overtime:warning to manager:{managerId} if WARN violation exists
+      this.gateway.emitToUser(dto.userId, 'assignment:created', { assignment });
+      this.gateway.emitToLocation(assignment.shift.locationId, 'assignment:created', { assignment });
+      if (result.violations.some((v) => v.rule === 'OVERTIME')) {
+        this.gateway.emitToManager(managerId, 'overtime:warning', {
+          userId: dto.userId,
+          projectedWeeklyHours: result.projectedWeeklyHours,
+        });
+      }
 
       return { success: true, assignment, ...result };
     } finally {
@@ -170,7 +180,10 @@ export class ShiftsService {
       data: { action: 'ASSIGNMENT_DELETED', actorId: managerId, shiftId, before: assignment as any },
     });
 
-    // TODO: emit socket event schedule:updated to location:{shift.locationId}
+    const updatedShift = await this.prisma.shift.findUnique({ where: { id: shiftId } });
+    if (updatedShift) {
+      this.gateway.emitToLocation(updatedShift.locationId, 'schedule:updated', { shiftId });
+    }
 
     return { success: true };
   }
@@ -200,7 +213,7 @@ export class ShiftsService {
       data: { action: 'SHIFT_EDITED', actorId: managerId, shiftId, before: before as any, after: shift as any },
     });
 
-    // TODO: emit socket event schedule:updated to location:{shift.locationId}
+    this.gateway.emitToLocation(shift.locationId, 'schedule:updated', { shift });
 
     return shift;
   }

@@ -10,6 +10,8 @@ import { ConstraintEngineModule } from './constraint-engine/constraint-engine.mo
 import { ShiftsModule } from './shifts/shifts.module';
 import { SwapsModule } from './swaps/swaps.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { GatewayModule } from './gateway/gateway.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     ShiftsModule,
     SwapsModule,
     NotificationsModule,
+    GatewayModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}
