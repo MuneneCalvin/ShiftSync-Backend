@@ -149,7 +149,7 @@ The NestJS app connects to PostgreSQL and Redis on the Docker internal network (
 ### Backend
 ```bash
 cd backend
-cp .env.example .env          # fill in DATABASE_URL, REDIS_URL, JWT secrets
+cp .env.example .env          # fill in DATABASE_URL, REDIS_URL, JWT secrets(access + refresh), CORS_ORIGIN
 npm install
 npx prisma db push
 npx ts-node prisma/seed.ts
