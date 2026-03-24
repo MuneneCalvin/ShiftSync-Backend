@@ -16,6 +16,11 @@ export class LocationsController {
     return this.locationsService.findAll();
   }
 
+  @Get(':id/on-duty')
+  getOnDuty(@Param('id') id: string) {
+    return this.locationsService.getOnDuty(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.locationsService.findOne(id);

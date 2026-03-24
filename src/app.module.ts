@@ -14,6 +14,7 @@ import { SwapsModule } from './swaps/swaps.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
 
 @Module({
   controllers: [AppController],
@@ -31,6 +32,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     NotificationsModule,
     GatewayModule,
     AnalyticsModule,
+    AuditLogsModule,
   ],
 })
 export class AppModule {}

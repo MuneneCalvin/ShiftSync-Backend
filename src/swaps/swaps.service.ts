@@ -316,6 +316,80 @@ export class SwapsService {
     }
   }
 
+  // Returns open DROP requests for shifts the current user is qualified for
+  async findOpenDrops(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { skills: true, certifications: true },
+    });
+
+    return this.prisma.swapRequest.findMany({
+      where: {
+        type: SwapType.DROP,
+        status: SwapStatus.PENDING,
+        requesterId: { not: userId },
+        expiresAt: { gt: new Date() },
+        shift: {
+          requiredSkill: { in: user.skills.map((s) => s.skill) },
+          locationId: { in: user.certifications.map((c) => c.locationId) },
+        },
+      },
+      include: {
+        requester: { select: { id: true, name: true, email: true } },
+        shift: { include: { location: true } },
+      },
+      orderBy: { expiresAt: 'asc' },
+    });
+  }
+
+  // Staff picks up an open DROP shift
+  async pickup(swapId: string, userId: string) {
+    const swap = await this.findOne(swapId);
+
+    if (swap.type !== SwapType.DROP) throw new BadRequestException('Not a drop request.');
+    if (swap.status !== SwapStatus.PENDING) throw new BadRequestException('Drop request is no longer available.');
+    if (swap.requesterId === userId) throw new BadRequestException('You cannot pick up your own drop request.');
+
+    // Check constraints for the picking-up user
+    const result = await this.constraintEngine.check({
+      userId,
+      shiftId: swap.shiftId,
+      managerId: 'system',
+    });
+
+    const blocks = result.violations.filter((v) => v.severity === 'BLOCK');
+    if (blocks.length > 0) {
+      return { success: false, violations: result.violations };
+    }
+
+    // Set the targetUser and move to MANAGER_REVIEW
+    await this.prisma.swapRequest.update({
+      where: { id: swapId },
+      data: { targetUserId: userId, status: SwapStatus.MANAGER_REVIEW, targetApproved: true },
+    });
+
+    await this.createNotification(swap.requesterId, 'DROP_PICKED_UP', 'Drop Picked Up',
+      `Your shift has been picked up and is awaiting manager approval.`);
+
+    // Notify managers at the location
+    const managers = await this.prisma.managerLocation.findMany({
+      where: { locationId: swap.shift.locationId },
+    });
+    for (const m of managers) {
+      await this.createNotification(m.userId, 'SWAP_PENDING_APPROVAL', 'Drop Request Needs Approval',
+        `A drop request is awaiting your approval.`);
+      this.gateway.emitToUser(m.userId, 'swap:requested', { swapId, type: 'DROP' });
+    }
+
+    this.gateway.emitToUser(swap.requesterId, 'swap:status_changed', { swapId, status: 'MANAGER_REVIEW' });
+
+    await this.prisma.auditLog.create({
+      data: { action: 'DROP_PICKED_UP', actorId: userId, swapId },
+    });
+
+    return { success: true };
+  }
+
   private async createNotification(userId: string, type: string, title: string, body: string) {
     return this.prisma.notification.create({
       data: { userId, type, title, body },

@@ -54,6 +54,12 @@ export class ShiftsController {
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
+  @Patch(':id/unpublish')
+  unpublish(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.shiftsService.unpublish(id, user.id);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Post(':id/assign')
   assign(
     @Param('id') shiftId: string,

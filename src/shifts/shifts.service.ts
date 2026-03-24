@@ -191,8 +191,31 @@ export class ShiftsService {
     return { success: true };
   }
 
+  async unpublish(shiftId: string, managerId: string) {
+    const shift = await this.prisma.shift.update({
+      where: { id: shiftId },
+      data: { published: false, publishedAt: null },
+      include: { location: true },
+    });
+
+    await this.prisma.auditLog.create({
+      data: { action: 'SHIFT_UNPUBLISHED', actorId: managerId, shiftId },
+    });
+
+    this.gateway.emitToLocation(shift.locationId, 'schedule:updated', { shift });
+    return shift;
+  }
+
   async update(shiftId: string, data: Partial<CreateShiftDto>, managerId: string) {
-    const before = await this.prisma.shift.findUnique({ where: { id: shiftId } });
+    const before = await this.prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+
+    // 48-hour edit cutoff
+    const hoursUntilStart = (before.startTime.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (before.published && hoursUntilStart < 48) {
+      throw new BadRequestException(
+        'Shifts cannot be edited within 48 hours of their start time.',
+      );
+    }
 
     // Auto-cancel PENDING/ACCEPTED swaps when shift is edited
     await this.prisma.swapRequest.updateMany({

@@ -8,7 +8,7 @@ export interface StaffHoursSummary {
   email: string;
   totalHours: number;
   weeklyBreakdown: { weekOf: string; hours: number }[];
-  saturdayEveningShifts: number;
+  premiumEveningShifts: number; // Fri + Sat evenings
   desiredHoursPerWeek: number | null;
   hoursVariance: number | null; // actual - desired
 }
@@ -27,20 +27,23 @@ export interface FairnessReport {
   locationName: string;
   staff: StaffHoursSummary[];
   fairnessScore: number; // 0-100, higher = more fair distribution
-  saturdayEveningDistribution: { userId: string; name: string; count: number }[];
+  premiumEveningDistribution: { userId: string; name: string; count: number }[];
 }
 
 function shiftHours(startTime: Date, endTime: Date): number {
   return differenceInMinutes(endTime, startTime) / 60;
 }
 
-function isSaturdayEvening(shift: { startTime: Date; endTime: Date }): boolean {
-  // Saturday evening = starts on Sunday 00:00-06:00 UTC (5pm-11pm PDT) OR Saturday 20:00+ UTC
+function isPremiumEvening(shift: { startTime: Date; endTime: Date }): boolean {
+  // Premium = Friday or Saturday evening (20:00+ UTC, or the next day's 00:00-06:00 UTC)
   const start = shift.startTime;
-  const day = start.getUTCDay(); // 0=Sun, 6=Sat
+  const day = start.getUTCDay(); // 0=Sun, 5=Fri, 6=Sat
   const hour = start.getUTCHours();
-  // 5pm PDT = midnight UTC (next day = Sunday), covers Saturday evening
-  return (day === 0 && hour >= 0 && hour <= 6) || (day === 6 && hour >= 20);
+  // Saturday evening: Sat 20:00+ or Sun 00:00-06:00
+  const satEve = (day === 6 && hour >= 20) || (day === 0 && hour >= 0 && hour <= 6);
+  // Friday evening: Fri 20:00+ or Sat 00:00-06:00
+  const friEve = (day === 5 && hour >= 20) || (day === 6 && hour >= 0 && hour <= 6);
+  return satEve || friEve;
 }
 
 @Injectable()
@@ -146,7 +149,7 @@ export class AnalyticsService {
         0,
       );
 
-      const satEveShifts = myShifts.filter(isSaturdayEvening).length;
+      const satEveShifts = myShifts.filter(isPremiumEvening).length;
 
       // Weekly breakdown
       const weekMap = new Map<string, number>();
@@ -168,7 +171,7 @@ export class AnalyticsService {
         email: user.email,
         totalHours: Math.round(totalHours * 10) / 10,
         weeklyBreakdown,
-        saturdayEveningShifts: satEveShifts,
+        premiumEveningShifts: satEveShifts,
         desiredHoursPerWeek: desired,
         hoursVariance: desired !== null ? Math.round((avgWeeklyActual - desired) * 10) / 10 : null,
       });
@@ -188,8 +191,8 @@ export class AnalyticsService {
     const cv = mean > 0 ? stdDev / mean : 0;
     const fairnessScore = Math.round(Math.max(0, Math.min(100, (1 - cv) * 100)));
 
-    const saturdayEveningDistribution = staff
-      .map((s) => ({ userId: s.userId, name: s.name, count: s.saturdayEveningShifts }))
+    const premiumEveningDistribution = staff
+      .map((s) => ({ userId: s.userId, name: s.name, count: s.premiumEveningShifts }))
       .sort((a, b) => b.count - a.count);
 
     return {
@@ -197,7 +200,7 @@ export class AnalyticsService {
       locationName: location.name,
       staff,
       fairnessScore,
-      saturdayEveningDistribution,
+      premiumEveningDistribution,
     };
   }
 

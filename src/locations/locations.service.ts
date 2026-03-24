@@ -27,6 +27,37 @@ export class LocationsService {
     return location;
   }
 
+  async getOnDuty(locationId: string) {
+    const now = new Date();
+    const shifts = await this.prisma.shift.findMany({
+      where: {
+        locationId,
+        published: true,
+        startTime: { lte: now },
+        endTime: { gte: now },
+      },
+      include: {
+        assignments: {
+          include: { user: { select: { id: true, name: true, email: true, skills: true } } },
+        },
+        location: true,
+      },
+    });
+
+    return shifts.map((s) => ({
+      shiftId: s.id,
+      requiredSkill: s.requiredSkill,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      staff: s.assignments.map((a) => ({
+        userId: a.userId,
+        name: a.user.name,
+        email: a.user.email,
+        skills: a.user.skills,
+      })),
+    }));
+  }
+
   async create(dto: CreateLocationDto) {
     return this.prisma.location.create({ data: dto });
   }

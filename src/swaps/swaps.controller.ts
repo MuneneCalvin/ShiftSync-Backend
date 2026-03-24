@@ -26,6 +26,11 @@ export class SwapsController {
     return this.swapsService.findAll(filters);
   }
 
+  @Get('open-drops')
+  findOpenDrops(@CurrentUser() user: any) {
+    return this.swapsService.findOpenDrops(user.id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.swapsService.findOne(id);
@@ -56,5 +61,10 @@ export class SwapsController {
   @Patch(':id/cancel')
   cancel(@Param('id') id: string, @CurrentUser() user: any) {
     return this.swapsService.cancel(id, user.id);
+  }
+
+  @Patch(':id/pickup')
+  pickup(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.swapsService.pickup(id, user.id);
   }
 }
