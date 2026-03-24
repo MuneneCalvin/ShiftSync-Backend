@@ -4,7 +4,7 @@ A full-stack multi-location staff scheduling platform built for Coastal Eats.
 
 **Live URLs**
 - Frontend: https://shift-sync-app.vercel.app
-- Backend API: https://shiftsync-backend-yp8z.onrender.com
+- Backend API: https://13.244.142.224.nip.io
 
 ---
 
@@ -35,7 +35,38 @@ A full-stack multi-location staff scheduling platform built for Coastal Eats.
 | Database | PostgreSQL 18 via Prisma v7 + `@prisma/adapter-pg` |
 | Cache / Locks | Redis (ioredis v5) |
 | Real-time | Socket.io 4 |
-| Deployment | Vercel (frontend), Render (backend + Postgres) |
+| Deployment | Vercel (frontend), AWS EC2 + Nginx + Docker (backend) |
+
+---
+
+## Deployment Architecture
+
+```
+┌─────────────────────────────┐        ┌──────────────────────────────────────┐
+│         Vercel              │        │           AWS EC2 Instance           │
+│                             │        │                                      │
+│   Next.js 15 (SSR/SSG)      │──────▶ │  Nginx (reverse proxy, SSL termination)
+│   shift-sync-app.vercel.app │        │           │                          │
+└─────────────────────────────┘        │           ▼                          │
+                                       │  ┌─────────────────────────────┐    │
+                                       │  │       Docker Compose        │    │
+                                       │  │                             │    │
+                                       │  │  ┌──────────┐  ┌────────┐  │    │
+                                       │  │  │ NestJS   │  │ Redis  │  │    │
+                                       │  │  │ :3001    │  │ :6379  │  │    │
+                                       │  │  └────┬─────┘  └────────┘  │    │
+                                       │  │       │                     │    │
+                                       │  │  ┌────▼────────────────┐   │    │
+                                       │  │  │    PostgreSQL        │   │    │
+                                       │  │  │    :5432            │   │    │
+                                       │  │  └─────────────────────┘   │    │
+                                       │  └─────────────────────────────┘    │
+                                       └──────────────────────────────────────┘
+```
+
+- **Nginx** handles HTTPS via nip.io SSL certificate and proxies to the NestJS container on port 3001
+- **Docker Compose** orchestrates NestJS, PostgreSQL, and Redis as isolated containers
+- **nip.io** provides DNS resolution for the EC2 public IP (`13.244.142.224.nip.io`)
 
 ---
 
@@ -106,7 +137,10 @@ Socket.io rooms are mapped on connection:
 - `admin` — all admin-level events
 
 ### CORS
-`CORS_ORIGIN` env var on Render accepts comma-separated origins. Falls back to `origin: true` (mirror) if not set — safe for an assessment environment.
+`CORS_ORIGIN` env var accepts comma-separated origins. Falls back to `origin: true` (mirror) if not set.
+
+### SSL on Docker
+The NestJS app connects to PostgreSQL and Redis on the Docker internal network (no SSL needed). The `DATABASE_SSL` env var drives SSL — set to `true` only for external connections (e.g. seeding from a local machine against a remote DB).
 
 ---
 
@@ -118,7 +152,7 @@ cd backend
 cp .env.example .env          # fill in DATABASE_URL, REDIS_URL, JWT secrets
 npm install
 npx prisma db push
-npx prisma db seed             # or: npx ts-node prisma/seed.ts
+npx ts-node prisma/seed.ts
 npm run start:dev
 # API on http://localhost:3001
 ```
@@ -132,12 +166,19 @@ npm run dev
 # UI on http://localhost:3000
 ```
 
+### Docker (production-like)
+```bash
+# From the backend directory
+docker compose up -d
+# Runs NestJS + PostgreSQL + Redis in containers
+# Nginx sits in front on the host, proxying :443 → :3001
+```
+
 ---
 
 ## Known Limitations
 
-- **Render free tier cold starts** — the backend may take 30–60 seconds to respond after inactivity. Refresh if the first request times out.
 - **No email delivery** — notifications are stored in the DB and surfaced in-app only. No SMTP integration.
 - **Availability granularity** — recurring availability is stored per day-of-week with a time window. Exception dates (single-day blocks) are supported but not exposed in the UI.
 - **No pagination** — shift and user lists are returned in full. Acceptable for the seed dataset; would need cursor pagination at scale.
-- **WebSocket on Render free tier** — Socket.io falls back to long-polling if the WebSocket upgrade is blocked. Real-time events still arrive, just with higher latency.
+- **nip.io domain** — the backend URL is tied to the EC2 public IP. If the instance is stopped and restarted with a new IP, the URL changes.
