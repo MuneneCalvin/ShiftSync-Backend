@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConstraintEngineService } from '../constraint-engine/constraint-engine.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
@@ -15,6 +15,13 @@ export class ShiftsService {
     @Inject(REDIS_CLIENT) private redis: Redis,
     private gateway: EventsGateway,
   ) {}
+
+  async assertManagerOwnsLocation(locationId: string, managerId: string) {
+    const link = await this.prisma.managerLocation.findUnique({
+      where: { userId_locationId: { userId: managerId, locationId } },
+    });
+    if (!link) throw new ForbiddenException('You are not assigned to manage this location.');
+  }
 
   async findByLocationAndWeek(locationId?: string, weekOf?: string) {
     return this.prisma.shift.findMany({

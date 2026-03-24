@@ -17,7 +17,15 @@ export class ShiftsController {
   constructor(private shiftsService: ShiftsService) {}
 
   @Get()
-  findAll(@Query('locationId') locationId: string, @Query('weekOf') weekOf: string) {
+  async findAll(
+    @Query('locationId') locationId: string,
+    @Query('weekOf') weekOf: string,
+    @CurrentUser() user: any,
+  ) {
+    // Managers can only query their assigned locations
+    if (user?.role === Role.MANAGER && locationId) {
+      await this.shiftsService.assertManagerOwnsLocation(locationId, user.id);
+    }
     return this.shiftsService.findByLocationAndWeek(locationId, weekOf);
   }
 

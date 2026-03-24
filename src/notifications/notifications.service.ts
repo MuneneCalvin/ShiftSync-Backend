@@ -26,4 +26,20 @@ export class NotificationsService {
       data: { read: true },
     });
   }
+
+  async getPreferences(userId: string) {
+    return this.prisma.notificationPreference.upsert({
+      where: { userId },
+      create: { userId, emailEnabled: false, pushEnabled: true },
+      update: {},
+    });
+  }
+
+  async updatePreferences(userId: string, dto: { emailEnabled?: boolean; pushEnabled?: boolean }) {
+    return this.prisma.notificationPreference.upsert({
+      where: { userId },
+      create: { userId, emailEnabled: dto.emailEnabled ?? false, pushEnabled: dto.pushEnabled ?? true },
+      update: dto,
+    });
+  }
 }

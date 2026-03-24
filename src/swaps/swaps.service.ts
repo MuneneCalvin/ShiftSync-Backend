@@ -15,12 +15,23 @@ export class SwapsService {
     private gateway: EventsGateway,
   ) {}
 
-  async findAll(filters: { requesterId?: string; locationId?: string; status?: SwapStatus }) {
+  async findAll(filters: { requesterId?: string; locationId?: string; status?: SwapStatus; managerId?: string }) {
+    // If managerId provided, scope to locations this manager is assigned to
+    let locationIds: string[] | undefined;
+    if (filters.managerId) {
+      const managed = await this.prisma.managerLocation.findMany({
+        where: { userId: filters.managerId },
+        select: { locationId: true },
+      });
+      locationIds = managed.map((m) => m.locationId);
+    }
+
     return this.prisma.swapRequest.findMany({
       where: {
         ...(filters.requesterId && { requesterId: filters.requesterId }),
         ...(filters.status && { status: filters.status }),
         ...(filters.locationId && { shift: { locationId: filters.locationId } }),
+        ...(locationIds && { shift: { locationId: { in: locationIds } } }),
       },
       include: {
         requester: { select: { id: true, name: true, email: true } },

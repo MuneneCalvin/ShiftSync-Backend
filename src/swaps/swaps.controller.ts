@@ -19,10 +19,19 @@ export class SwapsController {
     @Query('status') status?: SwapStatus,
     @CurrentUser() user?: any,
   ) {
-    // Staff see only their own swaps
-    const filters: { requesterId?: string; locationId?: string; status?: SwapStatus } = { locationId, status };
-    if (user?.role === Role.STAFF) filters.requesterId = user.id;
-    else if (requesterId) filters.requesterId = requesterId;
+    const filters: { requesterId?: string; locationId?: string; status?: SwapStatus; managerId?: string } = { status };
+    if (user?.role === Role.STAFF) {
+      // Staff see only their own swaps
+      filters.requesterId = user.id;
+    } else if (user?.role === Role.MANAGER) {
+      // Managers are scoped to their assigned locations (resolved in service via ManagerLocation)
+      filters.managerId = user.id;
+      if (requesterId) filters.requesterId = requesterId;
+    } else {
+      // Admin: no location restriction
+      if (locationId) filters.locationId = locationId;
+      if (requesterId) filters.requesterId = requesterId;
+    }
     return this.swapsService.findAll(filters);
   }
 

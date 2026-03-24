@@ -6,8 +6,11 @@ import { CreateLocationDto } from './dto/create-location.dto';
 export class LocationsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(managerUserId?: string) {
     return this.prisma.location.findMany({
+      where: managerUserId
+        ? { managers: { some: { userId: managerUserId } } }
+        : undefined,
       include: {
         managers: { include: { user: { select: { id: true, name: true, email: true } } } },
         certifications: { include: { user: { select: { id: true, name: true } } } },

@@ -1,5 +1,6 @@
-import { Controller, Get, Query, UseGuards, ParseIntPipe, DefaultValuePipe, Optional } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, ParseIntPipe, DefaultValuePipe, Res } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -10,6 +11,22 @@ import { AuditLogsService } from './audit-logs.service';
 @Controller('audit-logs')
 export class AuditLogsController {
   constructor(private auditLogsService: AuditLogsService) {}
+
+  @Get('export')
+  @Roles(Role.ADMIN)
+  async exportCsv(
+    @Query('locationId') locationId?: string,
+    @Query('action') action?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Res() res?: Response,
+  ) {
+    const csv = await this.auditLogsService.exportCsv({ locationId, action, startDate, endDate });
+    const filename = `audit-log-${new Date().toISOString().split('T')[0]}.csv`;
+    res!.setHeader('Content-Type', 'text/csv');
+    res!.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res!.send(csv);
+  }
 
   @Get()
   findAll(
