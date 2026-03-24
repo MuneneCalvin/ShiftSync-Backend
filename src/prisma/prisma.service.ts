@@ -5,7 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    const ssl = !process.env.DATABASE_URL?.includes('localhost') ? { rejectUnauthorized: false } : undefined;
+    const ssl = process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined;
     const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL!, ssl });
     super({ adapter });
   }
